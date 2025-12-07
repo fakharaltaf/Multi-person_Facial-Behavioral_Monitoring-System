@@ -1,0 +1,75 @@
+# Model Download URLs and Information
+
+# Face Detection Models
+detection:
+  retinaface_mobile025:
+    url: "https://github.com/onnx/models/raw/main/vision/body_analysis/retinaface/retinaface_mobile0.25.onnx"
+    local_path: "models/retinaface_mobile025.onnx"
+    input_size: [640, 640]
+    description: "Lightweight RetinaFace (MobileNet0.25 backbone)"
+  
+  retinaface_resnet50:
+    url: "https://github.com/onnx/models/raw/main/vision/body_analysis/retinaface/retinaface_r50.onnx"
+    local_path: "models/retinaface_resnet50.onnx"
+    input_size: [640, 640]
+    description: "Full RetinaFace (ResNet50 backbone) - more accurate"
+
+# Face Recognition Models
+recognition:
+  arcface_resnet100:
+    url: "https://github.com/onnx/models/raw/main/vision/body_analysis/arcface/arcface_resnet100.onnx"
+    local_path: "models/arcface_resnet100.onnx"
+    input_size: [112, 112]
+    output_size: 512
+    description: "ArcFace ResNet100 - gold standard for face recognition"
+  
+  arcface_mobilefacenet:
+    url: "https://github.com/onnx/models/raw/main/vision/body_analysis/arcface/arcface_mobilefacenet.onnx"
+    local_path: "models/arcface_mobilefacenet.onnx"
+    input_size: [112, 112]
+    output_size: 128
+    description: "Lightweight ArcFace variant"
+
+# Gaze Estimation
+gaze:
+  gaze360:
+    url: "http://gaze360.csail.mit.edu/models/gaze360_model.onnx"
+    local_path: "models/gaze360.onnx"
+    input_size: [224, 224]
+    description: "Gaze360 - full range gaze estimation"
+    alternative: "Will need conversion from PyTorch if ONNX not available"
+
+# Person Detection (Fallback)
+person_detection:
+  yolov8n:
+    url: "https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n.onnx"
+    local_path: "models/yolov8n.onnx"
+    input_size: [640, 640]
+    description: "YOLOv8 Nano for person detection fallback"
+
+# Facial Landmarks (68-point)
+landmarks:
+  mobilenet_landmarks:
+    url: "https://github.com/hollance/BlazeFace-PyTorch/raw/master/blazeface.onnx"
+    local_path: "models/face_landmarks.onnx"
+    description: "MediaPipe-style facial landmarks"
+    note: "May need custom conversion"
+
+# Notes for model acquisition
+notes: |
+  Some models may need manual download or conversion:
+  
+  1. RetinaFace: Check insightface GitHub for ONNX versions
+  2. ArcFace: Available in insightface model zoo
+  3. Gaze360: May require PyTorch to ONNX conversion
+  4. MagFace: Convert from official PyTorch checkpoint
+  
+  Alternative sources:
+  - InsightFace Model Zoo: https://github.com/deepinsight/insightface/tree/master/model_zoo
+  - ONNX Model Zoo: https://github.com/onnx/models
+  - Hugging Face: https://huggingface.co/models
+  
+  For AMD RX 5700 XT compatibility, ensure:
+  - Models are in ONNX format (opset 11+)
+  - No CUDA-specific operations
+  - Test with onnxruntime-directml first

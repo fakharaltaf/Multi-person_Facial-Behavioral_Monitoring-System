@@ -1,0 +1,151 @@
+# Multi-Person Tracking System Configuration
+
+# System Settings
+system:
+  device: "dml"  # DirectML for AMD GPU
+  max_people: 30
+  target_fps: 15
+  log_level: "INFO"
+
+# Input Settings
+input:
+  source: "webcam"  # Options: webcam, video, ip_camera
+  video_path: null
+  camera_id: 0
+  ip_camera_url: null
+  resolution: [1920, 1080]  # [width, height]
+  downscale_for_detection: true
+  detection_resolution: [1280, 720]
+
+# Face Detection (RetinaFace)
+detection:
+  model_type: "resnet50"  # Options: mobile025, resnet50
+  model_path: "models/retinaface_resnet50.onnx"
+  confidence_threshold: 0.6
+  nms_threshold: 0.4
+  min_face_size: 30  # pixels
+  max_faces: 35
+
+# Face Alignment
+alignment:
+  output_size: [112, 112]
+  reference_points: "arcface"  # Standard ArcFace alignment
+
+# Face Recognition (ArcFace/MagFace)
+recognition:
+  model_type: "arcface"  # Options: arcface, magface
+  model_path: "models/arcface_resnet100.onnx"
+  embedding_size: 512
+  batch_size: 8
+  similarity_threshold: 0.60  # Threshold for identity matching
+  quality_threshold: 0.5  # Minimum face quality to use embedding
+
+# Multi-Object Tracking
+tracking:
+  tracker_type: "strongsort"  # Options: strongsort, bytetrack
+  max_age: 45  # Frames to keep track alive without detection
+  min_hits: 3  # Minimum detections before track is confirmed
+  iou_threshold: 0.3
+  
+  # Appearance-based tracking
+  use_appearance: true
+  appearance_weight: 0.6  # Weight for embedding similarity
+  motion_weight: 0.4  # Weight for motion/IOU
+  
+  # Re-identification
+  reid_buffer_size: 90  # Frames to keep in re-ID memory
+  reid_threshold: 0.55  # Similarity for re-identification
+  
+  # Embedding smoothing
+  use_ema: true
+  ema_alpha: 0.85  # EMA smoothing factor (higher = more stable)
+
+# Gaze Estimation
+gaze:
+  enabled: true
+  model_path: "models/gaze360.onnx"
+  categories: ["forward", "left", "right", "down", "up"]
+  smoothing_window: 5  # Frames
+  forward_threshold: 15  # degrees from center
+
+# Head Pose Estimation
+head_pose:
+  enabled: true
+  method: "solvepnp"  # Using facial landmarks + 3D model
+  smoothing_window: 5
+
+# Eye Analysis
+eyes:
+  enabled: true
+  ear_threshold: 0.21  # Eye Aspect Ratio for blink detection
+  blink_frames: 2  # Consecutive frames for blink
+  closed_threshold: 0.18  # Threshold for eyes closed
+
+# Yawn Detection
+yawn:
+  enabled: true
+  mar_threshold: 0.6  # Mouth Aspect Ratio threshold
+  min_duration: 0.5  # seconds
+  smoothing_window: 3
+
+# Attentiveness Classification
+attentiveness:
+  enabled: true
+  temporal_window: 1.0  # seconds for averaging
+  
+  # Scoring weights
+  weights:
+    gaze_forward: 0.4
+    eyes_open: 0.3
+    head_aligned: 0.2
+    no_yawn: 0.1
+  
+  # Thresholds
+  attentive_score_threshold: 0.65
+  hysteresis: 0.1  # Prevent rapid switching
+
+# Temporal Smoothing
+smoothing:
+  gaze_window: 5
+  pose_window: 5
+  behavior_window: 15  # For attentiveness
+
+# Output Settings
+output:
+  display: true
+  display_fps: true
+  display_ids: true
+  display_behavior: true
+  
+  # Logging
+  log_to_csv: true
+  log_to_json: false
+  log_to_sqlite: true
+  output_dir: "data/outputs"
+  
+  # Video recording
+  record_video: false
+  output_video_path: "data/outputs/output.mp4"
+  
+  # Visualization
+  bbox_color: [0, 255, 0]
+  text_color: [255, 255, 255]
+  font_scale: 0.5
+  thickness: 2
+
+# Performance Optimization
+optimization:
+  use_threading: true
+  detection_interval: 1  # Run detection every N frames (1 = every frame)
+  skip_small_faces: true
+  small_face_threshold: 40  # pixels
+  batch_processing: true
+  max_batch_size: 16
+
+# Debug Settings
+debug:
+  save_crops: false
+  save_embeddings: false
+  visualize_landmarks: false
+  show_tracking_ids: true
+  verbose_logging: false
