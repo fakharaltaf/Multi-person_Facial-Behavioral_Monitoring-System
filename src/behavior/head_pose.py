@@ -299,22 +299,38 @@ def estimate_attention_level(yaw: float, pitch: float, roll: float) -> Tuple[flo
         attention_score: 0.0-1.0
         attention_level: "high", "medium", "low"
     """
-    # Calculate deviation from frontal pose
-    yaw_dev = abs(yaw) / 90.0  # Normalize to [0, 1]
-    pitch_dev = abs(pitch) / 60.0
-    roll_dev = abs(roll) / 45.0
+    # Very lenient thresholds - within ±60° yaw and ±40° pitch is considered attentive
     
-    # Combined deviation (weighted)
+    # Calculate normalized deviations with generous thresholds
+    yaw_dev = min(1.0, abs(yaw) / 60.0)  # Full penalty at 60° yaw (very lenient)
+    pitch_dev = min(1.0, abs(pitch) / 40.0)  # Full penalty at 40° pitch
+    roll_dev = min(1.0, abs(roll) / 50.0)  # Full penalty at 50° roll
+    
+    # Apply strong non-linear scaling (power of 1.5) to be very forgiving
+    yaw_dev = np.power(yaw_dev, 1.5)
+    pitch_dev = np.power(pitch_dev, 1.5)
+    roll_dev = np.power(roll_dev, 1.5)
+    
+    # Combined deviation (lower weights for even more forgiveness)
     deviation = 0.5 * yaw_dev + 0.3 * pitch_dev + 0.2 * roll_dev
     deviation = min(1.0, deviation)
     
     # Attention score (inverse of deviation)
     attention = 1.0 - deviation
     
-    # Categorize
-    if attention >= 0.7:
+    # Add small boost to compensate for pose estimation noise/jitter
+    # When face is mostly frontal, boost attention slightly
+    if abs(yaw) < 15 and abs(pitch) < 15:
+        attention = min(1.0, attention + 0.05)  # +5% boost for frontal poses
+    
+    # Ensure minimum score when looking roughly forward
+    if abs(yaw) < 10 and abs(pitch) < 10:
+        attention = max(attention, 0.95)  # Guarantee high score when very frontal
+    
+    # Categorize with lower thresholds
+    if attention >= 0.5:
         level = "high"
-    elif attention >= 0.4:
+    elif attention >= 0.25:
         level = "medium"
     else:
         level = "low"

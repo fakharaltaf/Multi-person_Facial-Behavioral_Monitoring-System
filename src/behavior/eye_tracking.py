@@ -167,31 +167,47 @@ def compute_mouth_aspect_ratio(landmarks: List[List[int]]) -> float:
     """
     Compute Mouth Aspect Ratio (MAR) for yawn detection
     
+    Note: With only 5 landmarks (RetinaFace), we cannot accurately measure
+    mouth opening. This function provides a rough estimate based on facial
+    geometry, but it's NOT reliable for yawn detection.
+    
     Args:
-        landmarks: 5 facial landmarks (uses mouth corners)
+        landmarks: 5 facial landmarks [left_eye, right_eye, nose, left_mouth, right_mouth]
     
     Returns:
-        MAR value (>0.6 typically indicates yawn/open mouth)
+        Estimated MAR value (very approximate)
     """
     if len(landmarks) != 5:
         return 0.0
     
+    left_eye = np.array(landmarks[0])
+    right_eye = np.array(landmarks[1])
+    nose = np.array(landmarks[2])
     left_mouth = np.array(landmarks[3])
     right_mouth = np.array(landmarks[4])
-    nose = np.array(landmarks[2])
     
-    # Vertical mouth opening (approximate from nose-to-mouth distance)
+    # Face height (eye to mouth distance)
+    eye_center = (left_eye + right_eye) / 2
     mouth_center = (left_mouth + right_mouth) / 2
-    vertical = np.linalg.norm(mouth_center - nose)
+    face_height = np.linalg.norm(mouth_center - eye_center)
     
-    # Horizontal mouth width
-    horizontal = np.linalg.norm(right_mouth - left_mouth)
+    # Mouth width
+    mouth_width = np.linalg.norm(right_mouth - left_mouth)
     
-    # MAR
-    if horizontal == 0:
+    # Eye-to-eye distance (face width reference)
+    eye_width = np.linalg.norm(right_eye - left_eye)
+    
+    # Estimate MAR based on mouth width relative to face proportions
+    # Normal: mouth_width ~= 0.6 * eye_width
+    # Yawning: mouth_width ~= 0.9-1.2 * eye_width
+    if eye_width == 0:
         return 0.0
     
-    mar = vertical / horizontal
+    mouth_ratio = mouth_width / eye_width
+    
+    # Scale to approximate MAR range (normal ~0.3-0.5, yawn >0.8)
+    # This is still very approximate!
+    mar = mouth_ratio * 0.7
     
     return mar
 
@@ -199,18 +215,22 @@ def compute_mouth_aspect_ratio(landmarks: List[List[int]]) -> float:
 class YawnDetector:
     """
     Detects yawns from mouth aspect ratio
+    
+    WARNING: With only 5-point landmarks, yawn detection is VERY unreliable.
+    The thresholds are set very high to avoid false positives.
+    For accurate yawn detection, use 68-point facial landmarks.
     """
     
     def __init__(
         self,
-        mar_threshold: float = 0.6,
-        consecutive_frames: int = 3
+        mar_threshold: float = 0.9,  # Very high threshold to reduce false positives
+        consecutive_frames: int = 8  # Require more frames to confirm yawn
     ):
         """
         Initialize yawn detector
         
         Args:
-            mar_threshold: MAR above this indicates yawn
+            mar_threshold: MAR above this indicates yawn (set high for 5-point landmarks)
             consecutive_frames: Minimum consecutive frames for yawn
         """
         self.mar_threshold = mar_threshold

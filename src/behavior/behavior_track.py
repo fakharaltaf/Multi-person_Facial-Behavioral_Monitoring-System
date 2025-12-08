@@ -117,6 +117,8 @@ class BehaviorTrack(Track):
         self.drowsiness_level = blink_result['drowsiness_level']
         
         # Mouth tracking (yawn detection)
+        # NOTE: Yawn detection with 5-point landmarks is VERY approximate
+        # For production use, consider using 68-point facial landmarks
         self.mar = compute_mouth_aspect_ratio(landmarks)
         
         yawn_result = self.yawn_detector.update(self.mar)
