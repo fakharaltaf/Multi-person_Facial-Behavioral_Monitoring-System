@@ -26,7 +26,7 @@ class RetinaFace:
         self,
         model_path: str,
         confidence_threshold: float = 0.5,
-        nms_threshold: float = 0.4,
+        nms_threshold: float = 0.25,
         input_size: Tuple[int, int] = (640, 640),
         device: str = "dml"
     ):
@@ -36,7 +36,7 @@ class RetinaFace:
         Args:
             model_path: Path to ONNX model file
             confidence_threshold: Minimum confidence for detections
-            nms_threshold: IoU threshold for Non-Maximum Suppression
+            nms_threshold: IoU threshold for Non-Maximum Suppression (0.25 is very aggressive)
             input_size: Model input size (width, height)
             device: Device type ('dml' for DirectML, 'cpu' for CPU)
         """
@@ -294,6 +294,7 @@ class RetinaFace:
     def _nms(self, detections: List[Dict], iou_threshold: float) -> List[Dict]:
         """
         Apply Non-Maximum Suppression to remove overlapping detections
+        Uses multiple strategies to handle multi-scale detections
         
         Args:
             detections: List of detection dictionaries
@@ -314,6 +315,10 @@ class RetinaFace:
         x2 = boxes[:, 2]
         y2 = boxes[:, 3]
         
+        # Calculate centers
+        cx = (x1 + x2) / 2
+        cy = (y1 + y2) / 2
+        
         areas = (x2 - x1 + 1) * (y2 - y1 + 1)
         order = scores.argsort()[::-1]
         
@@ -333,7 +338,26 @@ class RetinaFace:
             
             iou = inter / (areas[i] + areas[order[1:]] - inter)
             
-            inds = np.where(iou <= iou_threshold)[0]
+            # Check containment in both directions
+            containment_in_current = inter / areas[order[1:]]  # How much of other boxes are inside current
+            containment_of_current = inter / areas[i]  # How much of current box overlaps with others
+            
+            # Calculate center distance (normalized by box size)
+            box_size_i = np.sqrt(areas[i])
+            center_dist = np.sqrt((cx[i] - cx[order[1:]])**2 + (cy[i] - cy[order[1:]])**2)
+            normalized_dist = center_dist / box_size_i
+            
+            # Remove boxes if ANY of these conditions are met:
+            # 1. IoU exceeds threshold (standard NMS)
+            # 2. Other box is >40% contained in current box (multi-scale issue)
+            # 3. Current box is >30% overlapped with other
+            # 4. Centers are very close (within 0.5 box sizes) regardless of IoU
+            inds = np.where(
+                (iou <= iou_threshold) & 
+                (containment_in_current <= 0.4) & 
+                (containment_of_current <= 0.3) &
+                (normalized_dist > 0.5)
+            )[0]
             order = order[inds + 1]
         
         return [detections[i] for i in keep]

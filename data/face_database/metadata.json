@@ -10,5 +10,11 @@
     "name": "Fakhar Altaf",
     "added_at": "2025-12-08T05:11:48.236626",
     "embedding_index": 1
+  },
+  {
+    "person_id": "person_002",
+    "name": "Fakhar",
+    "added_at": "2025-12-09T02:03:10.349220",
+    "embedding_index": 0
   }
 ]
