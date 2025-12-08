@@ -126,14 +126,14 @@ class FaceDatabase:
     def find_match(
         self,
         query_embedding: np.ndarray,
-        threshold: float = 0.6
+        threshold: float = 0.75
     ) -> Tuple[Optional[str], float, Optional[Dict]]:
         """
         Find matching person in database
         
         Args:
             query_embedding: Query face embedding
-            threshold: Minimum similarity threshold
+            threshold: Minimum similarity threshold (0.75+ recommended for ArcFace)
         
         Returns:
             (person_id, similarity, metadata) or (None, 0.0, None)
@@ -141,11 +141,18 @@ class FaceDatabase:
         if not self.embeddings:
             return None, 0.0, None
         
-        # Compute similarities
+        # Normalize query embedding (ArcFace should already be normalized, but ensure it)
+        query_norm = query_embedding / (np.linalg.norm(query_embedding) + 1e-8)
+        
+        # Compute cosine similarities
         similarities = []
         for emb in self.embeddings:
-            sim = np.dot(query_embedding, emb)
-            sim = (sim + 1) / 2  # Convert to [0, 1]
+            # Normalize stored embedding
+            emb_norm = emb / (np.linalg.norm(emb) + 1e-8)
+            # Cosine similarity (already in [-1, 1])
+            sim = np.dot(query_norm, emb_norm)
+            # Convert to [0, 1] range for easier interpretation
+            sim = (sim + 1.0) / 2.0
             similarities.append(sim)
         
         # Find best match

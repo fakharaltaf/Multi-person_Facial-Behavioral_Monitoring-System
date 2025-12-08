@@ -98,7 +98,7 @@ def main():
             if track.embedding is not None and track.person_id is None:
                 person_id, similarity, metadata = database.find_match(
                     track.embedding,
-                    threshold=0.6
+                    threshold=0.75  # Higher threshold to reduce false matches
                 )
                 if person_id:
                     track.set_identity(
