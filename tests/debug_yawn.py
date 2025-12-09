@@ -54,7 +54,8 @@ def main():
     print("\nInstructions:")
     print("  - Keep your face neutral to see baseline MAR")
     print("  - Open your mouth wide (simulate yawn) to see MAR increase")
-    print("  - MAR > 0.6-0.7 typically indicates yawning")
+    print("  - MAR > 0.5 typically indicates yawning")
+    print("  - Yawn must be sustained for 10 frames to avoid false positives")
     print("  - Press 'q' to QUIT")
     
     mar_history = []
@@ -188,7 +189,8 @@ def main():
     
     print(f"\n[*] Session complete")
     print(f"[*] Maximum MAR observed: {max_mar:.3f}")
-    print(f"[*] Recommended threshold: ~0.6-0.7 for sensitive detection")
+    print(f"[*] Current threshold: 0.5 with 10 consecutive frames")
+    print(f"[*] This avoids false positives from talking while catching yawns at varying distances")
 
 if __name__ == "__main__":
     main()

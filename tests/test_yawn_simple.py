@@ -56,7 +56,8 @@ def main():
     print("\nInstructions:")
     print("  - Watch the MAR value on screen")
     print("  - Open your mouth wide to simulate a yawn")
-    print("  - MAR should go above 0.6 to trigger yawn detection")
+    print("  - MAR should go above 0.5 for 10 frames (~0.33 sec) to trigger")
+    print("  - Longer duration requirement helps avoid false positives from talking")
     print("  - Press 'q' to QUIT")
     
     while True:
@@ -94,7 +95,7 @@ def main():
                        cv2.FONT_HERSHEY_SIMPLEX, 0.7, (0, 255, 255), 2)
             info_y += 30
             
-            cv2.putText(frame, f"Threshold: 0.600", (x1, info_y),
+            cv2.putText(frame, f"Threshold: 0.500 (10 frames)", (x1, info_y),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
             info_y += 30
             

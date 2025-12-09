@@ -40,9 +40,10 @@ class BehaviorTrack(Track):
         self.blink_detector = BlinkDetector()
         # Use lower threshold for yawn detection with 68-point landmarks (more accurate)
         # 5-point: 0.9 threshold (very conservative due to inaccuracy)
-        # 68-point: 0.6 threshold (can be more sensitive with accurate landmarks)
-        yawn_threshold = 0.6 if self.use_dlib else 0.9
-        self.yawn_detector = YawnDetector(mar_threshold=yawn_threshold, consecutive_frames=6)
+        # 68-point: 0.4 threshold (works at varying distances, avoids talking with longer duration)
+        yawn_threshold = 0.2 if self.use_dlib else 0.2
+        # Require 10 frames (~0.33 sec) to distinguish from talking/mouth movements
+        self.yawn_detector = YawnDetector(mar_threshold=yawn_threshold, consecutive_frames=10)
         
         # Current behavioral state
         self.yaw = 0.0
