@@ -16,5 +16,17 @@
     "name": "Fakhar",
     "added_at": "2025-12-09T02:03:10.349220",
     "embedding_index": 0
+  },
+  {
+    "person_id": "person_020",
+    "name": "d",
+    "added_at": "2025-12-09T04:34:30.851305",
+    "embedding_index": 1
+  },
+  {
+    "person_id": "person_028",
+    "name": "Fakhar",
+    "added_at": "2025-12-09T04:34:51.785775",
+    "embedding_index": 2
   }
 ]

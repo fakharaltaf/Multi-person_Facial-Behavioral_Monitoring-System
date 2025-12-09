@@ -95,17 +95,29 @@ def main():
         
         # Match tracks with database
         for track in tracks:
-            if track.embedding is not None and track.person_id is None:
-                person_id, similarity, metadata = database.find_match(
-                    track.embedding,
-                    threshold=0.75  # Higher threshold to reduce false matches
-                )
-                if person_id:
-                    track.set_identity(
-                        person_id,
-                        metadata['name'],
-                        similarity
+            if track.embedding is not None:
+                # Use averaged embedding for more stable matching
+                avg_embedding = track.get_average_embedding()
+                if avg_embedding is not None:
+                    person_id, similarity, metadata = database.find_match(
+                        avg_embedding,
+                        threshold=0.75  # Higher threshold to reduce false matches
                     )
+                    
+                    # If no match or if we want to verify/update existing identity
+                    if person_id and (track.person_id is None or 
+                                     (track.hits % 30 == 0 and track.person_id != person_id)):
+                        # New match or re-verification shows different person
+                        track.set_identity(
+                            person_id,
+                            metadata['name'],
+                            similarity
+                        )
+                    elif not person_id and track.person_id is not None and track.hits % 30 == 0:
+                        # Re-verification shows no match - reset identity
+                        track.person_id = None
+                        track.person_name = "Unknown"
+                        track.identity_confidence = 0.0
         
         # Calculate FPS
         frame_time = time.time() - start_time
