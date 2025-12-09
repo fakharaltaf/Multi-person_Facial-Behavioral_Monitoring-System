@@ -38,7 +38,11 @@ class BehaviorTrack(Track):
         self.landmarks_68 = None  # Store 68-point landmarks if using dlib
         
         self.blink_detector = BlinkDetector()
-        self.yawn_detector = YawnDetector()
+        # Use lower threshold for yawn detection with 68-point landmarks (more accurate)
+        # 5-point: 0.9 threshold (very conservative due to inaccuracy)
+        # 68-point: 0.6 threshold (can be more sensitive with accurate landmarks)
+        yawn_threshold = 0.6 if self.use_dlib else 0.9
+        self.yawn_detector = YawnDetector(mar_threshold=yawn_threshold, consecutive_frames=6)
         
         # Current behavioral state
         self.yaw = 0.0
