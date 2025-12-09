@@ -222,7 +222,7 @@ def create_behavior_visualization(
     show_details: bool = True
 ) -> np.ndarray:
     """
-    Create comprehensive behavioral visualization
+    Create comprehensive behavioral visualization with metrics panel below video
     
     Args:
         image: Input image
@@ -232,11 +232,16 @@ def create_behavior_visualization(
         show_details: Show detailed info
     
     Returns:
-        Visualization image
+        Visualization image with metrics panel
     """
-    vis = draw_behavior_tracks(image, tracks, show_pose, show_details, show_stats=True)
+    # Draw tracks on original image (without overlaid stats)
+    vis = image.copy()
     
-    # FPS counter
+    # Draw each track
+    for track in tracks:
+        vis = draw_behavior_track(vis, track, show_pose, show_details=False)
+    
+    # FPS counter (top right)
     if fps > 0:
         cv2.putText(
             vis,
@@ -248,4 +253,100 @@ def create_behavior_visualization(
             2
         )
     
-    return vis
+    # Create metrics panel below the video
+    panel_height = 200
+    panel = np.zeros((panel_height, image.shape[1], 3), dtype=np.uint8)
+    panel.fill(30)  # Dark gray background
+    
+    if tracks:
+        # Left column: Overall statistics
+        col1_x = 20
+        y = 30
+        
+        cv2.putText(panel, "OVERALL STATISTICS", (col1_x, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 255), 2)
+        y += 30
+        
+        # Engagement stats
+        engagement_counts = {'engaged': 0, 'moderate': 0, 'disengaged': 0}
+        drowsy_count = 0
+        yawning_count = 0
+        avg_attention = 0.0
+        
+        for track in tracks:
+            engagement = track.get_engagement_level()
+            engagement_counts[engagement] += 1
+            avg_attention += track.attention_score
+            if track.is_drowsy:
+                drowsy_count += 1
+            if track.is_yawning:
+                yawning_count += 1
+        
+        avg_attention /= len(tracks)
+        
+        cv2.putText(panel, f"Active: {len(tracks)}", (col1_x, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        y += 25
+        cv2.putText(panel, f"Engaged: {engagement_counts['engaged']}", (col1_x, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+        y += 25
+        cv2.putText(panel, f"Moderate: {engagement_counts['moderate']}", (col1_x, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 255), 1)
+        y += 25
+        cv2.putText(panel, f"Disengaged: {engagement_counts['disengaged']}", (col1_x, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        y += 25
+        cv2.putText(panel, f"Avg Attention: {avg_attention:.3f}", (col1_x, y), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 255, 255), 1)
+        
+        # Right columns: Individual track details
+        col_width = 280
+        start_col = 300
+        
+        for idx, track in enumerate(tracks[:3]):  # Show up to 3 tracks
+            col_x = start_col + (idx * col_width)
+            y = 30
+            
+            # Header
+            name = track.person_name if track.person_name != "Unknown" else f"Track {track.track_id}"
+            cv2.putText(panel, name.upper(), (col_x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.6, (255, 255, 0), 2)
+            y += 30
+            
+            # Head pose angles
+            cv2.putText(panel, f"Yaw:   {track.yaw:6.1f} deg", (col_x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            y += 23
+            cv2.putText(panel, f"Pitch: {track.pitch:6.1f} deg", (col_x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            y += 23
+            cv2.putText(panel, f"Roll:  {track.roll:6.1f} deg", (col_x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (255, 255, 255), 1)
+            y += 23
+            
+            # Gaze and attention
+            cv2.putText(panel, f"Gaze: {track.gaze_direction}", (col_x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, (200, 200, 200), 1)
+            y += 23
+            
+            att_color = (0, 255, 0) if track.attention_score >= 0.7 else (0, 255, 255) if track.attention_score >= 0.5 else (0, 0, 255)
+            cv2.putText(panel, f"Attention: {track.attention_score:.3f}", (col_x, y), 
+                       cv2.FONT_HERSHEY_SIMPLEX, 0.45, att_color, 1)
+            y += 23
+            
+            # Alerts
+            if track.is_drowsy:
+                cv2.putText(panel, "DROWSY", (col_x, y), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 0, 255), 2)
+            if track.is_yawning:
+                cv2.putText(panel, "YAWNING", (col_x + 80, y), 
+                           cv2.FONT_HERSHEY_SIMPLEX, 0.45, (0, 165, 255), 2)
+    else:
+        # No tracks detected
+        cv2.putText(panel, "No faces detected", (image.shape[1]//2 - 100, panel_height//2), 
+                   cv2.FONT_HERSHEY_SIMPLEX, 0.7, (128, 128, 128), 2)
+    
+    # Stack video and panel vertically
+    result = np.vstack([vis, panel])
+    
+    return result
