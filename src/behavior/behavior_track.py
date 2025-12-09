@@ -15,17 +15,28 @@ from .eye_tracking import (
     compute_mouth_aspect_ratio
 )
 
+# Try to import dlib pose estimator (optional)
+try:
+    from .dlib_head_pose import DlibHeadPoseEstimator
+    DLIB_AVAILABLE = True
+except:
+    DLIB_AVAILABLE = False
+
 
 class BehaviorTrack(Track):
     """
     Extended Track with behavioral analysis capabilities
     """
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, use_dlib=False, dlib_estimator=None, **kwargs):
         super().__init__(*args, **kwargs)
         
         # Behavioral analyzers
         self.pose_estimator = HeadPoseEstimator()
+        self.use_dlib = use_dlib and DLIB_AVAILABLE
+        self.dlib_estimator = dlib_estimator if self.use_dlib else None
+        self.landmarks_68 = None  # Store 68-point landmarks if using dlib
+        
         self.blink_detector = BlinkDetector()
         self.yawn_detector = YawnDetector()
         
@@ -60,7 +71,8 @@ class BehaviorTrack(Track):
         embedding: Optional[np.ndarray] = None,
         landmarks: Optional[List[List[int]]] = None,
         confidence: float = 0.0,
-        image_shape: Optional[tuple] = None
+        image_shape: Optional[tuple] = None,
+        image: Optional[np.ndarray] = None
     ):
         """
         Update track with behavioral analysis
@@ -71,13 +83,114 @@ class BehaviorTrack(Track):
             landmarks: 5-point facial landmarks
             confidence: Detection confidence
             image_shape: (height, width) for pose estimation
+            image: Full image for dlib landmark detection
         """
         # Update base track
         super().update(bbox, embedding, landmarks, confidence)
         
-        # Analyze behavior if landmarks available
+        # Try dlib first if enabled and image provided
+        if self.use_dlib and self.dlib_estimator and image is not None:
+            # Extract face region for dlib (expand bbox slightly for better detection)
+            x1, y1, x2, y2 = map(int, bbox)
+            h, w = image.shape[:2]
+            
+            # Expand bbox by 20%
+            margin_x = int((x2 - x1) * 0.2)
+            margin_y = int((y2 - y1) * 0.2)
+            
+            x1 = max(0, x1 - margin_x)
+            y1 = max(0, y1 - margin_y)
+            x2 = min(w, x2 + margin_x)
+            y2 = min(h, y2 + margin_y)
+            
+            face_region = image[y1:y2, x1:x2]
+            
+            if face_region.size > 0:
+                # Detect landmarks in face region (without bbox, let dlib detect)
+                self.landmarks_68 = self.dlib_estimator.detect_landmarks(face_region, bbox=None)
+                
+                if self.landmarks_68 is not None:
+                    # Adjust landmarks back to full image coordinates
+                    self.landmarks_68[:, 0] += x1
+                    self.landmarks_68[:, 1] += y1
+                    
+                    self._analyze_behavior_dlib(self.landmarks_68, image_shape)
+                    return
+        
+        # Fall back to 5-point landmarks
         if landmarks and len(landmarks) == 5:
             self._analyze_behavior(landmarks, image_shape)
+    
+    def _analyze_behavior_dlib(self, landmarks_68: np.ndarray, image_shape: Optional[tuple]):
+        """
+        Perform behavioral analysis using 68-point dlib landmarks
+        
+        Args:
+            landmarks_68: 68-point facial landmarks
+            image_shape: Image dimensions for pose estimation
+        """
+        # Head pose estimation using dlib landmarks
+        if image_shape:
+            self.yaw, self.pitch, self.roll = self.dlib_estimator.estimate_pose(
+                landmarks_68, image_shape
+            )
+            self.gaze_direction = get_gaze_direction(self.yaw, self.pitch)
+            self.attention_score, self.attention_level = estimate_attention_level(
+                self.yaw, self.pitch, self.roll
+            )
+            
+            # Store pose history
+            self.pose_history.append({
+                'yaw': self.yaw,
+                'pitch': self.pitch,
+                'roll': self.roll,
+                'attention': self.attention_score
+            })
+            
+            self.attention_history.append(self.attention_score)
+        
+        # Eye tracking using dlib landmarks (much more accurate)
+        # Left eye: landmarks 36-41, Right eye: landmarks 42-47
+        left_eye = landmarks_68[36:42]
+        right_eye = landmarks_68[42:48]
+        
+        self.left_ear = self._compute_ear(left_eye)
+        self.right_ear = self._compute_ear(right_eye)
+        
+        blink_result = self.blink_detector.update(self.left_ear, self.right_ear)
+        self.is_blinking = blink_result['is_blinking']
+        self.blink_count = blink_result['total_blinks']
+        self.is_drowsy = blink_result['is_drowsy']
+        self.drowsiness_level = blink_result['drowsiness_level']
+        
+        # Mouth tracking using dlib landmarks (landmarks 48-67)
+        mouth = landmarks_68[48:68]
+        self.mar = self._compute_mar(mouth)
+        
+        yawn_result = self.yawn_detector.update(self.mar)
+        self.is_yawning = yawn_result['is_yawning']
+        self.yawn_count = yawn_result['total_yawns']
+    
+    def _compute_ear(self, eye_points: np.ndarray) -> float:
+        """Compute Eye Aspect Ratio from 6 eye landmarks"""
+        # Vertical distances
+        v1 = np.linalg.norm(eye_points[1] - eye_points[5])
+        v2 = np.linalg.norm(eye_points[2] - eye_points[4])
+        # Horizontal distance
+        h = np.linalg.norm(eye_points[0] - eye_points[3])
+        # EAR
+        return (v1 + v2) / (2.0 * h + 1e-6)
+    
+    def _compute_mar(self, mouth_points: np.ndarray) -> float:
+        """Compute Mouth Aspect Ratio from mouth landmarks"""
+        # Vertical distance (center of upper/lower lips)
+        v1 = np.linalg.norm(mouth_points[13] - mouth_points[19])  # 61-67
+        v2 = np.linalg.norm(mouth_points[14] - mouth_points[18])  # 62-66
+        v3 = np.linalg.norm(mouth_points[15] - mouth_points[17])  # 63-65
+        # Horizontal distance
+        h = np.linalg.norm(mouth_points[0] - mouth_points[6])  # 48-54
+        # MAR
+        return (v1 + v2 + v3) / (3.0 * h + 1e-6)
     
     def _analyze_behavior(self, landmarks: List[List[int]], image_shape: Optional[tuple]):
         """

@@ -9,6 +9,13 @@ import logging
 from ..tracking.tracker import MultiObjectTracker
 from .behavior_track import BehaviorTrack
 
+# Try to import dlib support
+try:
+    from .dlib_head_pose import DlibHeadPoseEstimator
+    DLIB_AVAILABLE = True
+except ImportError:
+    DLIB_AVAILABLE = False
+
 logger = logging.getLogger(__name__)
 
 
@@ -17,19 +24,34 @@ class BehaviorTracker(MultiObjectTracker):
     Multi-object tracker with integrated behavioral analysis
     """
     
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, use_dlib: bool = True, **kwargs):
         super().__init__(*args, **kwargs)
         
         # Override tracks list to use BehaviorTrack
         self.tracks: List[BehaviorTrack] = []
         
-        logger.info("BehaviorTracker initialized with behavioral analysis")
+        # Initialize dlib if requested and available
+        self.use_dlib = use_dlib and DLIB_AVAILABLE
+        self.dlib_estimator = None
+        
+        if self.use_dlib:
+            try:
+                self.dlib_estimator = DlibHeadPoseEstimator()
+                logger.info("BehaviorTracker initialized with dlib 68-point landmarks")
+            except Exception as e:
+                logger.warning(f"Failed to initialize dlib: {e}. Falling back to 5-point landmarks")
+                self.use_dlib = False
+        else:
+            if use_dlib and not DLIB_AVAILABLE:
+                logger.warning("dlib requested but not available. Using 5-point landmarks")
+            logger.info("BehaviorTracker initialized with 5-point landmarks")
     
     def update(
         self,
         detections: List[Dict],
         embeddings: Optional[List[np.ndarray]] = None,
-        image_shape: Optional[tuple] = None
+        image_shape: Optional[tuple] = None,
+        image: Optional[np.ndarray] = None
     ) -> List[BehaviorTrack]:
         """
         Update tracker with behavioral analysis
@@ -38,6 +60,7 @@ class BehaviorTracker(MultiObjectTracker):
             detections: List of detection dicts
             embeddings: Optional face embeddings
             image_shape: (height, width) for pose estimation
+            image: Full image for dlib landmark detection
         
         Returns:
             List of active behavior tracks
@@ -68,7 +91,8 @@ class BehaviorTracker(MultiObjectTracker):
                 embedding=embedding,
                 landmarks=detection.get('landmarks'),
                 confidence=detection.get('confidence', 0.0),
-                image_shape=image_shape
+                image_shape=image_shape,
+                image=image
             )
         
         # Mark unmatched tracks as missed
@@ -84,11 +108,42 @@ class BehaviorTracker(MultiObjectTracker):
                 bbox=detection['bbox'],
                 embedding=embedding,
                 landmarks=detection.get('landmarks'),
-                confidence=detection.get('confidence', 0.0)
+                confidence=detection.get('confidence', 0.0),
+                use_dlib=self.use_dlib,
+                dlib_estimator=self.dlib_estimator
             )
             
             # Initial behavioral analysis
-            if detection.get('landmarks') and image_shape:
+            if self.use_dlib and self.dlib_estimator and image is not None:
+                # Extract face region for dlib (expand bbox slightly for better detection)
+                bbox = detection['bbox']
+                x1, y1, x2, y2 = map(int, bbox)
+                h, w = image.shape[:2]
+                
+                # Expand bbox by 20%
+                margin_x = int((x2 - x1) * 0.2)
+                margin_y = int((y2 - y1) * 0.2)
+                
+                x1 = max(0, x1 - margin_x)
+                y1 = max(0, y1 - margin_y)
+                x2 = min(w, x2 + margin_x)
+                y2 = min(h, y2 + margin_y)
+                
+                face_region = image[y1:y2, x1:x2]
+                
+                if face_region.size > 0:
+                    # Detect landmarks in face region (without bbox, let dlib detect)
+                    new_track.landmarks_68 = self.dlib_estimator.detect_landmarks(face_region, bbox=None)
+                    
+                    if new_track.landmarks_68 is not None:
+                        # Adjust landmarks back to full image coordinates
+                        new_track.landmarks_68[:, 0] += x1
+                        new_track.landmarks_68[:, 1] += y1
+                        
+                        if image_shape:
+                            new_track._analyze_behavior_dlib(new_track.landmarks_68, image_shape)
+            
+            if new_track.landmarks_68 is None and detection.get('landmarks') and image_shape:
                 new_track._analyze_behavior(detection['landmarks'], image_shape)
             
             self.tracks.append(new_track)

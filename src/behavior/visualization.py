@@ -10,11 +10,112 @@ from ..tracking.visualization import get_color_for_id
 from ..behavior.behavior_track import BehaviorTrack
 
 
+def draw_68_landmarks(
+    image: np.ndarray,
+    landmarks_68: np.ndarray,
+    color: tuple = (0, 255, 0),
+    radius: int = 2
+) -> np.ndarray:
+    """
+    Draw 68 facial landmarks on image
+    
+    Args:
+        image: Input image
+        landmarks_68: 68x2 array of landmark coordinates
+        color: Color for landmarks (B, G, R)
+        radius: Radius of landmark points
+    
+    Returns:
+        Image with landmarks drawn
+    """
+    if landmarks_68 is None or len(landmarks_68) != 68:
+        return image
+    
+    result = image.copy()
+    
+    # Draw all landmarks
+    for i, (x, y) in enumerate(landmarks_68):
+        cv2.circle(result, (int(x), int(y)), radius, color, -1)
+    
+    # Highlight key points used for pose estimation in different color
+    key_points = [30, 8, 36, 45, 48, 54]  # nose, chin, eye corners, mouth corners
+    for idx in key_points:
+        x, y = landmarks_68[idx]
+        cv2.circle(result, (int(x), int(y)), radius + 2, (0, 0, 255), -1)
+    
+    # Draw facial feature contours
+    # Jaw line (0-16)
+    for i in range(16):
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    
+    # Eyebrows
+    for i in range(17, 21):  # Left eyebrow
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    
+    for i in range(22, 26):  # Right eyebrow
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    
+    # Nose
+    for i in range(27, 30):  # Nose bridge
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    
+    for i in range(31, 35):  # Nose base
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    
+    # Eyes
+    for i in range(36, 41):  # Left eye
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    pt1 = tuple(landmarks_68[41].astype(int))
+    pt2 = tuple(landmarks_68[36].astype(int))
+    cv2.line(result, pt1, pt2, color, 1)
+    
+    for i in range(42, 47):  # Right eye
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    pt1 = tuple(landmarks_68[47].astype(int))
+    pt2 = tuple(landmarks_68[42].astype(int))
+    cv2.line(result, pt1, pt2, color, 1)
+    
+    # Mouth outer
+    for i in range(48, 59):
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    pt1 = tuple(landmarks_68[59].astype(int))
+    pt2 = tuple(landmarks_68[48].astype(int))
+    cv2.line(result, pt1, pt2, color, 1)
+    
+    # Mouth inner
+    for i in range(60, 67):
+        pt1 = tuple(landmarks_68[i].astype(int))
+        pt2 = tuple(landmarks_68[i + 1].astype(int))
+        cv2.line(result, pt1, pt2, color, 1)
+    pt1 = tuple(landmarks_68[67].astype(int))
+    pt2 = tuple(landmarks_68[60].astype(int))
+    cv2.line(result, pt1, pt2, color, 1)
+    
+    return result
+
+
 def draw_behavior_track(
     image: np.ndarray,
     track: BehaviorTrack,
     show_pose: bool = True,
-    show_details: bool = True
+    show_details: bool = True,
+    show_landmarks: bool = False
 ) -> np.ndarray:
     """
     Draw track with behavioral information
@@ -24,6 +125,7 @@ def draw_behavior_track(
         track: BehaviorTrack object
         show_pose: Show pose axes
         show_details: Show detailed behavioral info
+        show_landmarks: Show 68-point landmarks if available
     
     Returns:
         Image with behavioral visualization
@@ -109,6 +211,10 @@ def draw_behavior_track(
             cv2.putText(image, alert_text, (x1, info_y),
                        cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 2)
     
+    # Draw 68-point landmarks if available and enabled
+    if show_landmarks and hasattr(track, 'landmarks_68') and track.landmarks_68 is not None:
+        image = draw_68_landmarks(image, track.landmarks_68, color=(0, 255, 0), radius=1)
+    
     # Draw pose axes
     if show_pose and track.landmarks and len(track.landmarks) == 5:
         image = track.pose_estimator.draw_pose_axes(
@@ -128,7 +234,8 @@ def draw_behavior_tracks(
     tracks: List[BehaviorTrack],
     show_pose: bool = True,
     show_details: bool = True,
-    show_stats: bool = True
+    show_stats: bool = True,
+    show_landmarks: bool = False
 ) -> np.ndarray:
     """
     Draw all behavioral tracks
@@ -139,6 +246,7 @@ def draw_behavior_tracks(
         show_pose: Show pose axes
         show_details: Show detailed info
         show_stats: Show statistics overlay
+        show_landmarks: Show 68-point landmarks if available
     
     Returns:
         Image with all tracks drawn
@@ -147,7 +255,7 @@ def draw_behavior_tracks(
     
     # Draw each track
     for track in tracks:
-        result = draw_behavior_track(result, track, show_pose, show_details)
+        result = draw_behavior_track(result, track, show_pose, show_details, show_landmarks)
     
     # Draw statistics overlay
     if show_stats and tracks:
@@ -219,7 +327,8 @@ def create_behavior_visualization(
     tracks: List[BehaviorTrack],
     fps: float = 0.0,
     show_pose: bool = True,
-    show_details: bool = True
+    show_details: bool = True,
+    show_landmarks: bool = False
 ) -> np.ndarray:
     """
     Create comprehensive behavioral visualization with metrics panel below video
@@ -239,7 +348,7 @@ def create_behavior_visualization(
     
     # Draw each track
     for track in tracks:
-        vis = draw_behavior_track(vis, track, show_pose, show_details=False)
+        vis = draw_behavior_track(vis, track, show_pose, show_details=False, show_landmarks=show_landmarks)
     
     # FPS counter (top right)
     if fps > 0:

@@ -44,9 +44,10 @@ def main():
         min_hits=3,
         iou_threshold=0.3,
         embedding_threshold=0.5,
-        use_embeddings=True
+        use_embeddings=True,
+        use_dlib=True  # Enable 68-point landmarks
     )
-    print("[OK] BehaviorTracker initialized")
+    print("[OK] BehaviorTracker initialized with dlib support")
     
     # Open webcam
     print("\n2. Opening webcam...")
@@ -63,6 +64,7 @@ def main():
     print("  - Press 'r' to REGISTER current tracks")
     print("  - Press 'p' to toggle POSE axes")
     print("  - Press 'd' to toggle DETAILS")
+    print("  - Press 'l' to toggle 68-point LANDMARKS")
     print("  - Press 's' to show STATISTICS")
     print("  - Press 'e' to show ENGAGEMENT report")
     print("  - Press 'c' to CLEAR all tracks")
@@ -70,6 +72,7 @@ def main():
     
     show_pose = True
     show_details = True
+    show_landmarks = False
     frame_times = []
     
     while True:
@@ -91,7 +94,7 @@ def main():
             embeddings = recognizer.extract_embeddings_batch(aligned_faces)
         
         # Update tracker with behavioral analysis
-        tracks = tracker.update(detections, embeddings, image_shape=(h, w))
+        tracks = tracker.update(detections, embeddings, image_shape=(h, w), image=frame)
         
         # Match tracks with database
         for track in tracks:
@@ -132,7 +135,8 @@ def main():
             tracks,
             fps=avg_fps,
             show_pose=show_pose,
-            show_details=show_details
+            show_details=show_details,
+            show_landmarks=show_landmarks
         )
         
         cv2.imshow('Behavioral Analysis System', vis)
@@ -180,6 +184,10 @@ def main():
         elif key == ord('d'):  # Toggle details
             show_details = not show_details
             print(f"Detailed info: {'ON' if show_details else 'OFF'}")
+        
+        elif key == ord('l'):  # Toggle landmarks
+            show_landmarks = not show_landmarks
+            print(f"68-point landmarks: {'ON' if show_landmarks else 'OFF'}")
         
         elif key == ord('s'):  # Show statistics
             print("\n--- TRACKER STATISTICS ---")
